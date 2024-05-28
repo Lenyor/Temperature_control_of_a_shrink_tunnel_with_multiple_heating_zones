@@ -3,7 +3,7 @@ clc
 clear
 close all
 
-% Choose the execution time of your controller
+% Choose the sampling of your controller
 % Either 1 or a multiple of 30
 T_c = 1; % [s]
 simulink_type = 'cl';
@@ -23,16 +23,16 @@ times = (0 : T_sim :  trial_length)'; % [s]
 N = length(times);
 
 % Grid voltage
-V_grid = zeros(N, 1);
+V_g = zeros(N, 1);
 for i = 1 : N
-    V_grid(i,1) = randi([380 410], 1, 1);
+    V_g(i,1) = randi([380 410], 1, 1);
     
 end
 V_grid_filter = designfilt('lowpassiir','FilterOrder',2, ...
     'HalfPowerFrequency',0.05,'DesignMethod','butter');
 
-V_grid = filtfilt(V_grid_filter, V_grid);
-V_grid = timeseries(V_grid, times);
+V_g = filtfilt(V_grid_filter, V_g);
+V_g = timeseries(V_g, times);
 
 % Production rate
 v = zeros(N, 1);
@@ -59,27 +59,36 @@ set_param(simulink_name, 'Solver', 'ode45', ...
     'StartTime', num2str(times(1)), ...
     'StopTime', num2str(times(end)))
 
+warning('off', 'Simulink:blocks:SwitchIgnoringThreshold')
 out = sim(simulink_name, 'ReturnWorkspaceOutputs', 'on');
+warning('on', 'Simulink:blocks:SwitchIgnoringThreshold')
 
 %% Plotting - setup
 plot_order = {[1, 2], [7, 8], [3, 4], [9, 10], [5, 6], [11, 12]};
-temperature_lcs = {'$T_1^{(3, r)}$', ...
-    '$T_1^{(3, l)}$', ...
-    '$T_1^{(2, r)}$', ...
-    '$T_1^{(2, l)}$', ...
-    '$T_1^{(1, r)}$', ...
-    '$T_1^{(1, l)}$', ...
-    '$T_2^{(1, r)}$', ...
-    '$T_2^{(1, l)}$', ...
-    '$T_2^{(2, r)}$', ...
-    '$T_2^{(2, l)}$', ...
-    '$T_1^{(3, r)}$', ...
-    '$T_1^{(3, l)}$'};
-
-full_names = cell(p, 1);
-for i = 1 : p
-    full_names{i} = ['$y_{', num2str(i), '}$ - ', temperature_lcs{i}];
-end
+temperature_lcs = {'$y_1^{(3, \mathrm{r})}$', ...
+    '$y_1^{(3, \mathrm{l})}$', ...
+    '$y_1^{(2, \mathrm{r})}$', ...
+    '$y_1^{(2, \mathrm{l})}$', ...
+    '$y_1^{(1, \mathrm{r})}$', ...
+    '$y_1^{(1, \mathrm{l})}$', ...
+    '$y_2^{(1, \mathrm{r})}$', ...
+    '$y_2^{(1, \mathrm{l})}$', ...
+    '$y_2^{(2, \mathrm{r})}$', ...
+    '$y_2^{(2, \mathrm{l})}$', ...
+    '$y_2^{(3, \mathrm{r})}$', ...
+    '$y_2^{(3, \mathrm{l})}$'};
+temperature_lcs_nolatex = {'y_1^(3,r)', ...
+    'y_1^(3,l)', ...
+    'y_1^(2,r)', ...
+    'y_1^(2,l)', ...
+    'y_1^(1,r)', ...
+    'y_1^(1,l)', ...
+    'y_2^(1,r)', ...
+    'y_2^(1,l)', ...
+    'y_2^(2,r)', ...
+    'y_2^(2,l)', ...
+    'y_2^(3,r)', ...
+    'y_2^(3,l)'};
 
 linewidth = 2;
 fontSize = 18;
@@ -94,8 +103,8 @@ sp_linespec = 'm :';
 set(0, 'defaultAxesFontSize', fontSize);
 set(0, 'defaultAxesTickLabelInterpreter', 'latex');
 
-temperature_lims = [0 200];
-temperature_ticks = 0 : 25 : 200;
+temperature_lims = [0 180];
+temperature_ticks = 0 : 30 : 180;
 duty_lims = [0 1];
 duty_ticks = 0 : 0.25 : 1;
 production_rate_lims = [0 200];
@@ -135,23 +144,24 @@ for i = 1 : length(plot_order)
     grid on
     ylim(temperature_lims)
     yticks(temperature_ticks)
-    ylabel('$y_k(t)$ $\left[^\circ C\right]$', 'interpreter', 'latex')
+    ylabel('$y_i^{(l, s)}(t)$ $\left[^\circ \mathrm{C}\right]$', 'interpreter', 'latex')
     xlabel('')
     
     yyaxis right
     plot(downsample(v.Time/60, 100), ...
         downsample(v.Data, 100), ...
         color_grid_voltage_and_production_rate, 'linewidth', linewidth)
-    ylabel('$v(t)$ $\left[ppm\right]$', 'interpreter', 'latex')
+    ylabel('$v(t)$ $\left[\mathrm{ppm}\right]$', 'interpreter', 'latex')
     ylim(production_rate_lims)
     yticks(production_rate_ticks)
     
     xlim([min(times/60), max(times/60)])
     
-    legend({['$y_{', num2str(plot_order{i}(1)), '}(t)$ - ' temperature_lcs{plot_order{i}(1)}], ...
-        ['$y_{', num2str(plot_order{i}(2)), '}(t)$ - ' temperature_lcs{plot_order{i}(2)}]}, ...
+    legend({temperature_lcs{plot_order{i}(1)}, ...
+        temperature_lcs{plot_order{i}(2)}, '$\mathrm{SP}$'}, ...
         'interpreter', 'latex', ...
-        'location', 'southwest')
+        'location', 'best', ...
+        'NumColumns', 3)
     
     ax = gca;
     ax.YAxis(1).Color = curr_color_1;
@@ -162,20 +172,20 @@ end
 
 axes = [axes, nexttile];
 yyaxis left
-plot(downsample(out.w_1.Time/60, 100), ...
-    downsample(out.w_1.Data, 100), ...
+plot(downsample(out.u_1.Time/60, 100), ...
+    downsample(out.u_1.Data, 100), ...
     color_zone_1, 'linewidth', linewidth)
 grid on
 ylim(duty_lims)
 yticks(duty_ticks)
-ylabel('$w_1(t)$', 'interpreter', 'latex')
-xlabel('$t \left[min\right]$', 'interpreter', 'latex')
+ylabel('$u_1(t)$', 'interpreter', 'latex')
+xlabel('$t \left[\mathrm{min}\right]$', 'interpreter', 'latex')
 
 yyaxis right
-plot(downsample(V_grid.Time/60, 100), ...
-    downsample(V_grid.Data, 100), ...
+plot(downsample(V_g.Time/60, 100), ...
+    downsample(V_g.Data, 100), ...
     color_grid_voltage_and_production_rate, 'linewidth', linewidth)
-ylabel('$V_{grid}(t)$ $\left[V\right]$', 'interpreter', 'latex')
+ylabel('$V_{\mathrm{g}}(t)$ $\left[\mathrm{V}\right]$', 'interpreter', 'latex')
 ylim(V_grid_lims)
 yticks(V_grid_ticks)
 
@@ -189,20 +199,20 @@ ax.YAxis(2).Color = color_grid_voltage_and_production_rate;
 
 axes = [axes, nexttile];
 yyaxis left
-plot(downsample(out.w_2.Time/60, 100), ...
-    downsample(out.w_2.Data, 100), ...
+plot(downsample(out.u_2.Time/60, 100), ...
+    downsample(out.u_2.Data, 100), ...
     color_zone_2, 'linewidth', linewidth)
 grid on
 ylim(duty_lims)
 yticks(duty_ticks)
-ylabel('$w_2(t)$', 'interpreter', 'latex')
-xlabel('$t \left[min\right]$', 'interpreter', 'latex')
+ylabel('$u_2(t)$', 'interpreter', 'latex')
+xlabel('$t \left[\mathrm{min}\right]$', 'interpreter', 'latex')
 
 yyaxis right
-plot(downsample(V_grid.Time/60, 100), ...
-    downsample(V_grid.Data, 100), ...
+plot(downsample(V_g.Time/60, 100), ...
+    downsample(V_g.Data, 100), ...
     color_grid_voltage_and_production_rate, 'linewidth', linewidth)
-ylabel('$V_{grid}(t)$ $\left[V\right]$', 'interpreter', 'latex')
+ylabel('$V_{\mathrm{g}}(t)$ $\left[\mathrm{V}\right]$', 'interpreter', 'latex')
 ylim(V_grid_lims)
 yticks(V_grid_ticks)
 
@@ -234,12 +244,12 @@ settling_times = nan(p, 1);
 for i = 1 : p
     stepInfos{i} = stepinfo(y_SP_tracking{i}, times_SP_tracking);
     settling_times(i) = stepInfos{i}.SettlingTime;
-    fprintf('y_%d settling_time = %.2f [min] \n', ...
-        i, settling_times(i)/60);
+    fprintf('%s settling_time = %.2f [min] \n', ...
+        temperature_lcs_nolatex{i}, settling_times(i)/60);
     
     steady_state_errors(i) = abs(SP_SP_tracking(end) - y_SP_tracking{i}(end));
-    fprintf('y_%d steady_state_error  = %.2f [°C] \n\n',...
-        i, steady_state_errors(i));
+    fprintf('%s steady_state_error  = %.2f [°C] \n\n',...
+        temperature_lcs_nolatex{i}, steady_state_errors(i));
 end
 
 figure
@@ -249,16 +259,16 @@ bar(1 : 1 : p/2, settling_times(1 : p/2)/60, color_zone_1)
 hold on
 bar(p/2 + 1 : 1 : p, settling_times(p/2 + 1 : 1 : p)/60, color_zone_2)
 xticks(1 : 1 : p)
-xticklabels(full_names)
-ylabel('Settling time $[min]$', 'interpreter', 'latex')
+xticklabels(temperature_lcs)
+ylabel('Settling time $[\mathrm{min}]$', 'interpreter', 'latex')
 
 nexttile
 bar(1 : 1 : p/2, steady_state_errors(1 : p/2), color_zone_1)
 hold on
 bar(p/2 + 1 : 1 : p, steady_state_errors(p/2 + 1 : 1 : p), color_zone_2)
 xticks(1 : 1 : p)
-xticklabels(full_names)
-ylabel('Steady state errors $[^\circ C]$', 'interpreter', 'latex')
+xticklabels(temperature_lcs)
+ylabel('Steady state errors $[^\circ \mathrm{C}]$', 'interpreter', 'latex')
 
 %% Disturbance rejection
 id_start_production = find(v.Data > 0, 1, 'first');
@@ -276,7 +286,8 @@ y_err = cell(p, 1);
 for i = 1 : p
     y_err{i} = y_d_rejection{i} - y_d_rejection{i}(1);
     AUC(i) = trapz(times_d_rejection./60, abs(y_err{i}));
-    fprintf('y_%d AUC = %.2f [°C/min] \n', i, AUC(i));
+    fprintf('%s AUC = %.2f [°C/min] \n', ...
+        temperature_lcs_nolatex{i}, AUC(i));
 end
 fprintf('\n');
 
@@ -316,19 +327,20 @@ for i = 1 : length(plot_order)
         ylims, color_packs)
     grid on
     ylim(ylims)
-    ylabel('$y_k(t) - \bar{y}_k''$ $\left[^\circ C\right]$', 'interpreter', 'latex')
+    ylabel('$y_i^{(l, s)}(t) - \bar{y}_{T_i}^{(l, s)}$ $\left[^\circ \mathrm{C}\right]$', 'interpreter', 'latex')
     xlabel('')
     
     xlim([min(times/60), max(times/60)])
     
-    legend({['$y_{', num2str(plot_order{i}(1)), '}(t)$ - ' temperature_lcs{plot_order{i}(1)}], ...
-        ['$y_{', num2str(plot_order{i}(2)), '}(t)$ - ' temperature_lcs{plot_order{i}(2)}]}, ...
+    legend({temperature_lcs{plot_order{i}(1)}, ...
+        temperature_lcs{plot_order{i}(2)}}, ...
         'interpreter', 'latex', ...
-        'location', 'southwest')
+        'location', 'best', ...
+        'NumColumns', 2)
     
     if i == length(plot_order) - 1 || ...
             i == length(plot_order)
-        xlabel('$t \left[min\right]$', 'interpreter', 'latex')
+        xlabel('$t \left[\mathrm{min}\right]$', 'interpreter', 'latex')
     end
 end
 

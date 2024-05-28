@@ -6,6 +6,6 @@ T_I_11 = 841.6941455268073;
 T_I_22 = 757.1049307125121;
 
 % The original control was designed to control the temperatures at the
-% locations T_1^{(1, r)} and T_2^{(2, l)}
+% locations y_1^{(1, r)} and y_2^{(2, l)}
 zone_1_ctrl_idx = 5;
 zone_2_ctrl_idx = 10;
